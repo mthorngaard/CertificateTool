@@ -79,6 +79,7 @@ The tool checks that the certificate matches the private key before exporting.
 
 - `app.py`: the GUI
 - `csrgen.py`: CSR and self-signed certificate generation, PFX/PEM export, no GUI code
+- `scripts/build-portable.ps1`: builds the portable Windows zip
 
 ## License
 
