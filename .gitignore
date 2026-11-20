@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+
+# Never commit generated secrets or certificates
+*.key
+*.pfx
+*.p12
+*.pem
+*.csr
+*.crt
+*.cer
+*.p7b
