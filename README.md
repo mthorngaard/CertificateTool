@@ -1,6 +1,10 @@
 # CertificateTool
 
-A small desktop GUI (Python/Tkinter) that generates a **CSR** you can paste into a certificate provider's admin portal. It uses the same fields as IIS' *Create Certificate Request* wizard, and it can turn the issued certificate into a **PFX** or **CRT + KEY** files afterwards.
+A small desktop GUI (Python/Tkinter) with three tabs:
+
+1. **Create CSR**: generates a CSR you can paste into a certificate provider's admin portal, using the same fields as IIS' *Create Certificate Request* wizard.
+2. **Self-signed certificate**: creates a self-signed TLS server certificate (for test, internal or development use).
+3. **Export certificate**: turns an issued certificate plus its private key into a **PFX** or **CRT + KEY** files.
 
 Everything runs locally. Nothing is sent over the network.
 
@@ -42,7 +46,18 @@ Then:
 
 You do not need the CSR file itself to build a PFX later, only the issued certificate and the private key.
 
-## 2. Export the issued certificate
+## 2. Create a self-signed certificate
+
+Open the **Self-signed certificate** tab. It has the same Distinguished Name, key type, hash and SAN fields as the CSR tab, plus:
+
+- **Valid for (days)**: default 365.
+- **Password**: protects the `.key` file (optional) or the PFX (required, IIS needs one on import).
+
+Click **Generate certificate**, then save it with **Save CRT + KEY...** (PEM, for nginx/Apache etc.) or **Save PFX...** (IIS/Windows). The certificate is a TLS server certificate (Server Authentication, not a CA) with the SANs you entered, so add every hostname or IP clients will use.
+
+Clients will not trust a self-signed certificate by default. Import it into the client's trusted root store, or accept the warning, for testing.
+
+## 3. Export the issued certificate
 
 When the CA has issued the certificate, open the **Export certificate** tab:
 
@@ -63,7 +78,7 @@ The tool checks that the certificate matches the private key before exporting.
 ## Project layout
 
 - `app.py`: the GUI
-- `csrgen.py`: CSR generation and PFX/PEM export, no GUI code
+- `csrgen.py`: CSR and self-signed certificate generation, PFX/PEM export, no GUI code
 
 ## License
 

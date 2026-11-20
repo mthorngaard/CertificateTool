@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import ipaddress
 import re
 from dataclasses import dataclass, field
@@ -10,7 +11,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import pkcs12
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 RSA_SIZES = ["2048", "3072", "4096"]
 EC_CURVES = {"P-256": ec.SECP256R1, "P-384": ec.SECP384R1, "P-521": ec.SECP521R1}
@@ -117,9 +118,7 @@ def _generate_key(req: CsrRequest):
     return ec.generate_private_key(EC_CURVES[req.key_size]())
 
 
-def generate_csr(req: CsrRequest) -> CsrResult:
-    validate(req)
-
+def _build_name(req: CsrRequest) -> x509.Name:
     attrs: list[x509.NameAttribute] = []
     # Same order as IIS/certreq: C, S, L, O, OU, CN
     if req.country.strip():
@@ -133,8 +132,10 @@ def generate_csr(req: CsrRequest) -> CsrResult:
     if req.organizational_unit.strip():
         attrs.append(x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, req.organizational_unit.strip()))
     attrs.append(x509.NameAttribute(NameOID.COMMON_NAME, req.common_name.strip()))
-    name = x509.Name(attrs)
+    return x509.Name(attrs)
 
+
+def _collect_sans(req: CsrRequest) -> list[str]:
     sans: list[str] = []
     if req.include_cn_in_san:
         try:
@@ -145,6 +146,13 @@ def generate_csr(req: CsrRequest) -> CsrResult:
     for s in req.san_entries:
         if s and s not in sans:
             sans.append(s)
+    return sans
+
+
+def generate_csr(req: CsrRequest) -> CsrResult:
+    validate(req)
+    name = _build_name(req)
+    sans = _collect_sans(req)
 
     builder = x509.CertificateSigningRequestBuilder().subject_name(name)
     if sans:
@@ -163,6 +171,74 @@ def generate_csr(req: CsrRequest) -> CsrResult:
         private_key=key,
         subject=csr.subject.rfc4514_string(),
         sans=sans,
+    )
+
+
+@dataclass
+class SelfSignedResult:
+    cert_pem: str
+    private_key: object
+    subject: str
+    sans: list[str]
+    not_after: datetime.datetime
+
+
+MAX_VALIDITY_DAYS = 36500
+
+
+def generate_self_signed(req: CsrRequest, days: int) -> SelfSignedResult:
+    """Create a self-signed TLS server certificate (subject == issuer)."""
+    validate(req)
+    if not 1 <= days <= MAX_VALIDITY_DAYS:
+        raise CsrError(f"Validity must be between 1 and {MAX_VALIDITY_DAYS} days.")
+    name = _build_name(req)
+    sans = _collect_sans(req)
+    key = _generate_key(req)
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    not_before = now - datetime.timedelta(minutes=5)  # tolerate small clock skew
+    not_after = now + datetime.timedelta(days=days)
+
+    builder = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=req.key_algorithm == "RSA",
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(key.public_key()), critical=False
+        )
+    )
+    if sans:
+        builder = builder.add_extension(
+            x509.SubjectAlternativeName([_san_to_general_name(s) for s in sans]), critical=False
+        )
+    cert = builder.sign(key, HASHES[req.hash_name]())
+    return SelfSignedResult(
+        cert_pem=cert.public_bytes(serialization.Encoding.PEM).decode("ascii"),
+        private_key=key,
+        subject=cert.subject.rfc4514_string(),
+        sans=sans,
+        not_after=not_after,
     )
 
 
