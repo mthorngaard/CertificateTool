@@ -8,12 +8,24 @@ A small desktop GUI (Python/Tkinter) with three tabs:
 
 Everything runs locally. Nothing is sent over the network.
 
-## Requirements
+## Get started
 
-- Windows, macOS or Linux with Python 3.9+ (Tkinter is included with the standard Windows/macOS installers)
+### Option A: Windows, no Python needed (portable)
+
+1. Download `CertificateTool-windows-x64.zip` from the [latest release](https://github.com/mthorngaard/CertificateTool/releases/latest).
+2. If Windows marks the download as blocked, right-click the zip > **Properties** > tick **Unblock** > OK, *before* extracting.
+3. Extract the zip anywhere and double-click `CertificateTool.bat`.
+
+No installation, administrator rights or code-signing certificate are needed. The bundle contains the official Python build from python.org (signed by the Python Software Foundation) plus the app's plain Python source files, so there is no unsigned `.exe` to trigger SmartScreen. You can rebuild the zip yourself with `scripts\build-portable.ps1` (see below).
+
+> Locked-down machines that use AppLocker/WDAC may still block running scripts or Python from user folders. That depends on your organisation's policy.
+
+### Option B: run from source (Windows, macOS, Linux)
+
+Requirements:
+
+- Python 3.9+ with Tkinter (included with the standard Windows/macOS installers; on Debian/Ubuntu run `apt install python3-tk`). On Windows, tick *Add python.exe to PATH* when installing.
 - The [`cryptography`](https://pypi.org/project/cryptography/) package
-
-## Run
 
 ```
 pip install -r requirements.txt
@@ -21,6 +33,14 @@ python app.py
 ```
 
 On Windows you can also double-click `start.bat`, which installs the dependency if needed and starts the app.
+
+### Building the portable zip
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\build-portable.ps1
+```
+
+The script downloads the pinned Python release from python.org, verifies its SHA-256 hash, installs `cryptography` into it, runs a smoke test and writes `CertificateTool-windows-x64.zip` to `%LOCALAPPDATA%\CertificateTool-build` (override with `-OutDir`).
 
 ## 1. Create a CSR
 
