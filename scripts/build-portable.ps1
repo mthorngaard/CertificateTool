@@ -45,8 +45,9 @@ New-Item -ItemType Directory $root | Out-Null
 Expand-Archive $pyZip (Join-Path $root 'python')
 $py = Join-Path $root 'python\python.exe'
 
-Write-Host 'Installing cryptography...'
-& $py -m pip install --no-warn-script-location --disable-pip-version-check -r (Join-Path $repo 'requirements.txt')
+Write-Host 'Installing dependencies (hash-pinned)...'
+# requirements-build.txt pins exact versions and SHA-256 hashes (see lock-build-requirements.ps1)
+& $py -m pip install --no-warn-script-location --disable-pip-version-check --require-hashes --only-binary=:all: -r (Join-Path $repo 'requirements-build.txt')
 if ($LASTEXITCODE -ne 0) { throw 'pip install failed' }
 
 Write-Host 'Pruning...'
@@ -60,30 +61,15 @@ Get-ChildItem (Join-Path $root 'python') -Recurse -Directory -Filter '__pycache_
 
 Write-Host 'Adding app and launcher...'
 New-Item -ItemType Directory (Join-Path $root 'app') | Out-Null
-Copy-Item (Join-Path $repo 'app.py'), (Join-Path $repo 'csrgen.py') (Join-Path $root 'app')
+Copy-Item (Join-Path $repo '*.py') (Join-Path $root 'app')
 Copy-Item (Join-Path $repo 'README.md'), (Join-Path $repo 'LICENSE') $root
 # -E: ignore PYTHON* env vars, -s: ignore user site-packages, so the bundle is self-contained
 Set-Content -Encoding ascii (Join-Path $root 'CertificateTool.bat') (
     "@echo off`r`nstart `"`" `"%~dp0python\pythonw.exe`" -E -s `"%~dp0app\app.py`"`r`n")
 
 Write-Host 'Smoke test...'
-$test = Join-Path $OutDir 'smoke_test.py'
-@"
-import sys
-sys.path.insert(0, r'$root\app')
-import app
-a = app.App()
-a.ss_form.v_cn.set('smoke.example.com'); a._ss_generate(); a.update()
-assert 'BEGIN CERTIFICATE' in a.ss_out.get('1.0', 'end')
-a.csr_form.v_cn.set('smoke.example.com'); a._generate(); a.update()
-assert 'BEGIN CERTIFICATE REQUEST' in a.csr_out.get('1.0', 'end')
-a.ss_saved = a.key_saved = True
-a.destroy()
-print('ok')
-"@ | Set-Content -Encoding utf8 $test
-& $py -E -s $test
+& $py -E -s (Join-Path $repo 'scripts\smoke_test.py') (Join-Path $root 'app')
 if ($LASTEXITCODE -ne 0) { throw 'smoke test failed' }
-Remove-Item $test
 
 Write-Host 'Creating zip...'
 # tar.exe (built into Windows 10+) writes standard zips with forward slashes;

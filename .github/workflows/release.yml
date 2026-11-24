@@ -1,0 +1,33 @@
+name: Release
+
+# Push a tag such as v1.1.0 to build the portable Windows zip and attach it to a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  portable-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Tag must match version.py
+        run: python -c "import sys, version; sys.exit(0 if 'v' + version.__version__ == '${{ github.ref_name }}' else 'tag does not match version.py')"
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Tests
+        run: python -m pytest -v
+      - name: Build portable zip
+        shell: pwsh
+        run: ./scripts/build-portable.ps1 -OutDir "$env:RUNNER_TEMP/build"
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $zip = "$env:RUNNER_TEMP/build/CertificateTool-windows-x64.zip"
+          gh release create "${{ github.ref_name }}" $zip --title "${{ github.ref_name }}" --generate-notes

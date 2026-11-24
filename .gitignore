@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .venv/
+.pytest_cache/
 
 # Never commit generated secrets or certificates
 *.key

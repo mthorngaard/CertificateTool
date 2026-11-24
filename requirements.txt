@@ -1,1 +1,3 @@
 cryptography>=42
+# Optional: drag and drop of files onto the file fields (the app works without it)
+tkinterdnd2>=0.4
